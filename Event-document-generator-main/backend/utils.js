@@ -440,9 +440,11 @@ export const buildBudgetSheetPdf = async ({
 
     const safeAddress = collegeAddress || "College Address";
     const safeTitle = title || "Budget Report";
-    const titleWidth = bold.widthOfTextAtSize(safeTitle, 13);
+    const headerTextLeft = LANDSCAPE_PAGE.margin + 74;
+    const headerTextWidth = LANDSCAPE_PAGE.width - headerTextLeft - LANDSCAPE_PAGE.margin;
+    const titleWidth = Math.min(bold.widthOfTextAtSize(safeTitle, 13), headerTextWidth);
     page.drawText(safeTitle, {
-      x: (LANDSCAPE_PAGE.width - titleWidth) / 2,
+      x: headerTextLeft + (headerTextWidth - titleWidth) / 2,
       y,
       size: 13,
       font: bold,
@@ -450,13 +452,13 @@ export const buildBudgetSheetPdf = async ({
     });
     y -= 16;
 
-    const addressLines = wrapText(safeAddress, font, 10.5, LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin * 2 - 120);
+    const addressLines = wrapText(safeAddress, font, 10.2, headerTextWidth);
     addressLines.forEach((line) => {
-      const addressWidth = font.widthOfTextAtSize(line, 10.5);
+      const addressWidth = font.widthOfTextAtSize(line, 10.2);
       page.drawText(line, {
-        x: (LANDSCAPE_PAGE.width - addressWidth) / 2,
+        x: headerTextLeft + (headerTextWidth - addressWidth) / 2,
         y,
-        size: 10.5,
+        size: 10.2,
         font,
         color: rgb(0.38, 0.38, 0.4),
       });
@@ -625,7 +627,19 @@ export const buildBudgetSheetPdf = async ({
     }
 
     await ensureSpace(66);
-    const totalsX = LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin - 235;
+    const totalsBoxX = LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin - 248;
+    const totalsBoxY = y - 60;
+    const totalsBoxWidth = 208;
+    const totalsBoxHeight = 74;
+    page.drawRectangle({
+      x: totalsBoxX,
+      y: totalsBoxY,
+      width: totalsBoxWidth,
+      height: totalsBoxHeight,
+      color: rgb(0.985, 0.985, 0.99),
+      borderWidth: 0.6,
+      borderColor: rgb(0.86, 0.86, 0.9),
+    });
     const totalRows = [
       ["Subtotal", formatCurrency(record.subtotal || 0)],
       ["Tax Total", formatCurrency(record.taxTotal || 0)],
@@ -634,22 +648,23 @@ export const buildBudgetSheetPdf = async ({
     ];
     totalRows.forEach(([label, value], index) => {
       const isGrand = index === totalRows.length - 1;
+      const rowY = y - 10 - index * 16;
       page.drawText(label, {
-        x: totalsX,
-        y: y - index * 18,
+        x: totalsBoxX + 12,
+        y: rowY,
         size: isGrand ? 9.4 : 8.8,
         font: isGrand ? bold : font,
         color: rgb(0.18, 0.18, 0.2),
       });
       page.drawText(value, {
-        x: LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin - 8 - bold.widthOfTextAtSize(value, isGrand ? 9.4 : 8.8),
-        y: y - index * 18,
+        x: totalsBoxX + totalsBoxWidth - 12 - bold.widthOfTextAtSize(value, isGrand ? 9.4 : 8.8),
+        y: rowY,
         size: isGrand ? 9.4 : 8.8,
         font: isGrand ? bold : font,
         color: rgb(0.12, 0.12, 0.14),
       });
     });
-    y -= 84;
+    y -= 88;
   }
 
   drawFooter();
@@ -676,6 +691,8 @@ export const buildBudgetEstimatePdf = async ({
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   let y = PAGE.height - PAGE.margin;
+  const headerTextLeft = PAGE.margin + 76;
+  const headerTextWidth = PAGE.width - headerTextLeft - PAGE.margin;
 
   const collegeImageDrawn = await drawImageFromData(pdfDoc, collegeLogo, page, PAGE.margin, y + 10);
   if (!collegeImageDrawn) {
@@ -683,9 +700,9 @@ export const buildBudgetEstimatePdf = async ({
   }
 
   const safeCollegeName = collegeName || "College Name";
-  const collegeNameWidth = bold.widthOfTextAtSize(safeCollegeName, 15);
+  const collegeNameWidth = Math.min(bold.widthOfTextAtSize(safeCollegeName, 15), headerTextWidth);
   page.drawText(safeCollegeName, {
-    x: (PAGE.width - collegeNameWidth) / 2,
+    x: headerTextLeft + (headerTextWidth - collegeNameWidth) / 2,
     y,
     size: 15,
     font: bold,
@@ -694,34 +711,34 @@ export const buildBudgetEstimatePdf = async ({
   y -= 18;
 
   const safeAddress = collegeAddress || "College Address";
-  const addressFontSize = fitFontSizeToWidth(safeAddress, font, 9.8, PAGE.width - PAGE.margin * 2 - 90, 8);
+  const addressFontSize = fitFontSizeToWidth(safeAddress, font, 9.2, headerTextWidth, 7.6);
   const addressWidth = font.widthOfTextAtSize(safeAddress, addressFontSize);
   page.drawText(safeAddress, {
-    x: (PAGE.width - addressWidth) / 2,
+    x: headerTextLeft + (headerTextWidth - addressWidth) / 2,
     y,
     size: addressFontSize,
     font,
     color: rgb(0.35, 0.35, 0.35),
+  });
+  y -= 24;
+
+  const safeTitle = title || "Budget Estimation Report";
+  const titleWidth = Math.min(bold.widthOfTextAtSize(safeTitle, 13), headerTextWidth);
+  page.drawText(safeTitle, {
+    x: headerTextLeft + (headerTextWidth - titleWidth) / 2,
+    y,
+    size: 13,
+    font: bold,
+    color: rgb(0.12, 0.12, 0.12),
   });
   y -= 20;
 
   page.drawText(`Date: ${normalizeDate(date)}`, {
     x: PAGE.margin,
     y,
-    size: 10.5,
+    size: 10.2,
     font,
     color: rgb(0.18, 0.18, 0.2),
-  });
-  y -= 20;
-
-  const safeTitle = title || "Budget Estimation Report";
-  const titleWidth = bold.widthOfTextAtSize(safeTitle, 13);
-  page.drawText(safeTitle, {
-    x: (PAGE.width - titleWidth) / 2,
-    y,
-    size: 13,
-    font: bold,
-    color: rgb(0.12, 0.12, 0.12),
   });
   y -= 18;
 
