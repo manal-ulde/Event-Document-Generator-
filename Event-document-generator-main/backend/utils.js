@@ -214,15 +214,6 @@ export const buildPdfDocument = async ({
     drawBadge(clubAcronym || "CLUB", PAGE.width - PAGE.margin - 52, y + 10, clubBrandColor || "#7c3aed");
   }
 
-  page.drawText(title || documentLabel, {
-    x: PAGE.margin,
-    y,
-    size: 17,
-    font: bold,
-    color: rgb(0.08, 0.08, 0.08),
-  });
-  y -= 24;
-
   const headerCenter = collegeName || "College Name";
   const headerCenterWidth = bold.widthOfTextAtSize(headerCenter, 14);
   page.drawText(headerCenter, {
