@@ -30,6 +30,18 @@ export const safeArray = (value) => (Array.isArray(value) ? value.filter(Boolean
 
 export const clampText = (value = "", max = 5000) => String(value || "").trim().slice(0, max);
 
+const hexToRgb = (hex = "#111111") => {
+  const value = hex.replace("#", "").trim();
+  const normalized = value.length === 3 ? value.split("").map((char) => `${char}${char}`).join("") : value;
+  const int = Number.parseInt(normalized, 16);
+
+  return {
+    r: ((int >> 16) & 255) / 255,
+    g: ((int >> 8) & 255) / 255,
+    b: (int & 255) / 255,
+  };
+};
+
 export const normalizeDate = (value) => {
   if (!value) {
     return new Date().toLocaleDateString("en-IN", {
@@ -102,6 +114,10 @@ export const buildPdfDocument = async ({
   footerText,
   collegeLogo,
   clubLogo,
+  collegeAcronym,
+  clubAcronym,
+  collegeBrandColor,
+  clubBrandColor,
 }) => {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([PAGE.width, PAGE.height]);
@@ -128,10 +144,41 @@ export const buildPdfDocument = async ({
       width: dimensions.width,
       height: dimensions.height,
     });
+
+    return true;
   };
 
-  await drawImageIfPresent(collegeLogo, PAGE.margin, y + 10);
-  await drawImageIfPresent(clubLogo, PAGE.width - PAGE.margin - 52, y + 10);
+  const drawBadge = (label, x, topY, hexColor) => {
+    const color = hexToRgb(hexColor || "#111111");
+    const size = 52;
+    page.drawRectangle({
+      x,
+      y: topY - size,
+      width: size,
+      height: size,
+      color: rgb(color.r, color.g, color.b),
+    });
+
+    const safeLabel = String(label || "").slice(0, 8);
+    const textWidth = bold.widthOfTextAtSize(safeLabel, 10);
+    page.drawText(safeLabel, {
+      x: x + (size - textWidth) / 2,
+      y: topY - size / 2 - 4,
+      size: 10,
+      font: bold,
+      color: rgb(1, 1, 1),
+    });
+  };
+
+  const collegeImageDrawn = await drawImageIfPresent(collegeLogo, PAGE.margin, y + 10);
+  if (!collegeImageDrawn) {
+    drawBadge(collegeAcronym || "PCCOE", PAGE.margin, y + 10, collegeBrandColor || "#111827");
+  }
+
+  const clubImageDrawn = await drawImageIfPresent(clubLogo, PAGE.width - PAGE.margin - 52, y + 10);
+  if (!clubImageDrawn) {
+    drawBadge(clubAcronym || "CLUB", PAGE.width - PAGE.margin - 52, y + 10, clubBrandColor || "#7c3aed");
+  }
 
   page.drawText(title || documentLabel, {
     x: PAGE.margin,
