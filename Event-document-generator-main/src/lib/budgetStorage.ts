@@ -28,6 +28,7 @@ export type StoredBudgetRecord = {
   taxTotal: number;
   discount: number;
   grandTotal: number;
+  isDraft?: boolean;
 };
 
 export const BUDGET_STORAGE_KEY = "docuprint-budget-records";
