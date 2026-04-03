@@ -71,37 +71,53 @@ const BudgetCategoriesPage = () => {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {categories.map((category) => {
           const Icon = iconMap[category] || PartyPopper;
+          const isCategoryExpanded = expandedCategory === category;
+          const folders = categoryRecords.get(category) || [];
           return (
-            <button
+            <div
               key={category}
-              onClick={() => {
-                setExpandedCategory(expandedCategory === category ? "" : category);
-                setExpandedFolderId("");
-              }}
-              className={`rounded-[24px] border-2 bg-card p-5 text-left ${expandedCategory === category ? "border-foreground brutal-shadow" : "border-foreground brutal-shadow-sm"}`}
+              className={`rounded-[24px] border-2 bg-card p-5 ${isCategoryExpanded ? "border-foreground brutal-shadow" : "border-foreground brutal-shadow-sm"}`}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted brutal-border">
-                  <Icon className="h-6 w-6" strokeWidth={2.2} />
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedCategory(isCategoryExpanded ? "" : category);
+                  setExpandedFolderId("");
+                }}
+                className="w-full text-left"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted brutal-border">
+                    <Icon className="h-6 w-6" strokeWidth={2.2} />
+                  </div>
+                  <ChevronDown className={`mt-1 h-4 w-4 transition-transform ${isCategoryExpanded ? "rotate-180" : ""}`} strokeWidth={2.4} />
                 </div>
-                <ChevronDown className={`mt-1 h-4 w-4 transition-transform ${expandedCategory === category ? "rotate-180" : ""}`} strokeWidth={2.4} />
-              </div>
-              <h3 className="mt-5 text-xl font-bold">{category}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{counts.get(category) || 0} events</p>
+                <h3 className="mt-5 text-xl font-bold">{category}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{counts.get(category) || 0} events</p>
+              </button>
 
-              {expandedCategory === category ? (
+              {isCategoryExpanded ? (
                 <div className="mt-5 space-y-3 border-t border-foreground/10 pt-4">
-                  {(categoryRecords.get(category) || []).length > 0 ? (
-                    (categoryRecords.get(category) || []).map((record) => (
+                  {folders.length > 0 ? (
+                    folders.map((record) => {
+                      const isFolderExpanded = expandedFolderId === record.id;
+                      return (
                       <div key={record.id} className="rounded-[18px] border border-foreground/10 bg-background">
-                        <button onClick={() => setExpandedFolderId(expandedFolderId === record.id ? "" : record.id)} className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedFolderId(isFolderExpanded ? "" : record.id)}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/40"
+                        >
                           <div>
                             <p className="font-semibold">{record.title}</p>
                             <p className="text-sm text-muted-foreground">{record.date} | {record.items.length} expenses</p>
                           </div>
-                          <p className="font-semibold">{formatBudgetCurrency(record.grandTotal)}</p>
+                          <div className="flex items-center gap-3">
+                            <p className="font-semibold">{formatBudgetCurrency(record.grandTotal)}</p>
+                            <ChevronDown className={`h-4 w-4 transition-transform ${isFolderExpanded ? "rotate-180" : ""}`} strokeWidth={2.4} />
+                          </div>
                         </button>
-                        {expandedFolderId === record.id ? (
+                        {isFolderExpanded ? (
                           <div className="border-t border-foreground/10 px-4 py-4">
                             {record.items.length > 0 ? (
                               <div className="space-y-3">
@@ -109,7 +125,9 @@ const BudgetCategoriesPage = () => {
                                   <div key={item.id} className="rounded-[14px] border border-foreground/10 bg-card px-4 py-3">
                                     <p className="font-medium">{item.label}</p>
                                     <p className="mt-1 text-sm text-muted-foreground">{item.vendorName || record.vendor}</p>
-                                    <p className="mt-2 text-sm">{item.paymentMethod || record.paymentMethod} | {formatBudgetCurrency(item.amount)}</p>
+                                    <p className="mt-2 text-sm text-muted-foreground">{item.purchaseDate || record.date} | {item.paymentMethod || record.paymentMethod}</p>
+                                    <p className="mt-2 text-sm font-medium">{formatBudgetCurrency(item.amount)}</p>
+                                    {item.notes ? <p className="mt-2 text-xs text-muted-foreground">{item.notes}</p> : null}
                                   </div>
                                 ))}
                               </div>
@@ -119,7 +137,7 @@ const BudgetCategoriesPage = () => {
                           </div>
                         ) : null}
                       </div>
-                    ))
+                    )})
                   ) : (
                     <div className="rounded-[18px] border-2 border-dashed border-foreground/20 px-4 py-8 text-center text-sm text-muted-foreground">
                       No folders found for this category.
@@ -127,7 +145,7 @@ const BudgetCategoriesPage = () => {
                   )}
                 </div>
               ) : null}
-            </button>
+            </div>
           );
         })}
       </div>

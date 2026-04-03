@@ -2,6 +2,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "../config.js";
 import { clampText } from "../utils.js";
 
+const formatInr = (value) =>
+  `Rs. ${Number(value || 0).toLocaleString("en-IN", {
+    maximumFractionDigits: 0,
+  })}`;
+
 const createProposalPrompt = (payload) => `
 You are writing a formal college event proposal body.
 
@@ -82,6 +87,32 @@ const generateTextWithGemini = async (prompt) => {
 };
 
 export const generateBudgetAnalysisNarrative = async (payload) => {
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const expectedBudget = Number(payload.expectedBudget || 0);
+  const actualSpend = Number(payload.grandTotal || 0);
+  const variance = actualSpend - expectedBudget;
+  const largestExpense = items.reduce(
+    (largest, item) => (Number(item.amount || 0) > Number(largest?.amount || 0) ? item : largest),
+    items[0] || null
+  );
+  const vendorTotals = items.reduce((map, item) => {
+    const key = item.vendorName || payload.vendor || "Unknown vendor";
+    map.set(key, (map.get(key) || 0) + Number(item.amount || 0));
+    return map;
+  }, new Map());
+  const topVendorEntry = [...vendorTotals.entries()].sort((a, b) => b[1] - a[1])[0];
+  const expenseTypeTotals = items.reduce((map, item) => {
+    const key = item.expenseType || "General";
+    map.set(key, (map.get(key) || 0) + Number(item.amount || 0));
+    return map;
+  }, new Map());
+  const topExpenseTypeEntry = [...expenseTypeTotals.entries()].sort((a, b) => b[1] - a[1])[0];
+  const overspendText =
+    variance > 0
+      ? `The folder is overspent by ${formatInr(variance)} compared with the approved budget.`
+      : variance < 0
+        ? `The folder is under budget by ${formatInr(Math.abs(variance))}, which leaves room for pending operational costs.`
+        : "The folder is exactly on the approved budget.";
   const prompt = `
 You are an analyst for a college budget management system.
 
@@ -97,6 +128,7 @@ Folder title: ${payload.title || "Untitled folder"}
 Category: ${payload.category || "General"}
 Expected budget: ${payload.expectedBudget || 0}
 Actual spend: ${payload.grandTotal || 0}
+Budget variance: ${variance}
 Vendor: ${payload.vendor || "Unknown"}
 Description: ${clampText(payload.description || "", 800)}
 Expenses:
@@ -110,21 +142,31 @@ ${clampText(payload.csvSummary || "No CSV uploaded.", 2000)}
 
   const text = await generateTextWithGemini(prompt);
   if (!text) {
+    const summaryParts = [
+      `${payload.title || "This folder"} in the ${payload.category || "general"} category has recorded ${formatInr(actualSpend)} against an expected allocation of ${formatInr(expectedBudget)}.`,
+      largestExpense ? `The largest single expense is ${largestExpense.label} at ${formatInr(largestExpense.amount)}.` : null,
+      topVendorEntry ? `${topVendorEntry[0]} accounts for the highest vendor outflow at ${formatInr(topVendorEntry[1])}.` : null,
+    ].filter(Boolean);
+
     return {
       source: "template",
-      summary: `${payload.title || "This folder"} currently reflects an actual spend of ${payload.grandTotal || 0} against an expected allocation of ${payload.expectedBudget || 0}. The recorded entries indicate how the budget has been distributed across vendors, expense types, and supporting notes.`,
+      summary: summaryParts.join(" "),
       insights: [
-        payload.grandTotal > payload.expectedBudget
-          ? "The folder is currently above the planned budget and should be reviewed for controllable overspend."
-          : "The folder is currently within the planned budget and remains financially manageable.",
-        "Review the largest expense entries first, since they will have the biggest effect on savings or reallocation.",
-        "Compare vendor-specific spending to identify whether repeat vendors are increasing total cost.",
-        "Keep notes and payment methods updated so future audit and reporting flows stay accurate.",
+        overspendText,
+        largestExpense
+          ? `${largestExpense.label} is the cost driver in this folder, contributing ${formatInr(largestExpense.amount)} to the spend profile.`
+          : "This folder does not have enough expense entries yet to identify a dominant cost driver.",
+        topExpenseTypeEntry
+          ? `${topExpenseTypeEntry[0]} is the highest spending expense type at ${formatInr(topExpenseTypeEntry[1])}, so this is the first area to audit for savings or reallocation.`
+          : "Expense-type tagging is still limited, so category-wise spend insights will improve as more entries are added.",
+        topVendorEntry
+          ? `${topVendorEntry[0]} is the most expensive vendor touchpoint so far, which makes it the best candidate for rate comparison or negotiation.`
+          : "Vendor-level comparison is not available yet because the expense entries do not have enough vendor detail.",
       ],
       recommendation:
-        payload.grandTotal > payload.expectedBudget
-          ? "It is recommended to freeze non-essential spending in this folder until the overspending categories are validated."
-          : "It is recommended to continue using this folder structure and maintain regular review checkpoints as new expenses are added.",
+        variance > 0
+          ? `Freeze non-essential additions in ${payload.title || "this folder"} until ${topExpenseTypeEntry?.[0] || "the main spend category"} is reviewed and the overspend of ${formatInr(variance)} is justified or reduced.`
+          : `Continue tracking ${payload.title || "this folder"} with the current structure, and use the remaining ${formatInr(Math.abs(Math.min(variance, 0)))} strategically for pending items or contingency coverage.`,
     };
   }
 
