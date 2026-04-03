@@ -1,278 +1,196 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Download, FileText, Calendar, Building2, Users, MapPin } from "lucide-react";
+import { ArrowLeft, Download, FileText, LoaderCircle } from "lucide-react";
+import { api, downloadBase64Pdf } from "@/lib/api";
 
 interface ProposalData {
-  eventName: string;
-  organizer: string;
-  date: string;
+  collegeName: string;
+  collegeAddress: string;
+  clubName: string;
+  authorityName: string;
+  eventTitle: string;
+  eventDate: string;
   venue: string;
-  authority: string;
+  subject: string;
+  targetAudience: string;
   budget: string;
   objective: string;
-  description: string;
+  eventSummary: string;
+  keyPoints: string;
 }
 
-const emptyProposal: ProposalData = {
-  eventName: "",
-  organizer: "",
-  date: "",
+const initialState: ProposalData = {
+  collegeName: "",
+  collegeAddress: "",
+  clubName: "",
+  authorityName: "",
+  eventTitle: "",
+  eventDate: "",
   venue: "",
-  authority: "",
+  subject: "",
+  targetAudience: "",
   budget: "",
   objective: "",
-  description: "",
-};
-
-const ProposalPreview = ({ data }: { data: ProposalData }) => {
-  const today = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  return (
-    <div className="bg-card brutal-border p-8 min-h-[600px] font-sans text-sm leading-relaxed">
-      {/* Header */}
-      <div className="text-center mb-8 pb-6 border-b-2 border-foreground">
-        <div className="w-12 h-12 bg-primary brutal-border mx-auto mb-3 flex items-center justify-center">
-          <FileText className="w-6 h-6 text-primary-foreground" strokeWidth={2.5} />
-        </div>
-        <h2 className="text-xl font-bold uppercase tracking-tight">
-          Event Proposal
-        </h2>
-        <p className="font-mono text-xs text-muted-foreground mt-1">{today}</p>
-      </div>
-
-      {/* Title */}
-      <div className="mb-6">
-        <h3 className="text-2xl font-bold uppercase">
-          {data.eventName || (
-            <span className="text-muted-foreground/40">Event Name</span>
-          )}
-        </h3>
-        <div className="h-1 w-16 bg-secondary mt-2" />
-      </div>
-
-      {/* Meta Grid */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="brutal-border p-3 bg-muted/30">
-          <p className="font-mono text-xs text-muted-foreground uppercase">Organizer</p>
-          <p className="font-bold mt-1">
-            {data.organizer || <span className="text-muted-foreground/40">—</span>}
-          </p>
-        </div>
-        <div className="brutal-border p-3 bg-muted/30">
-          <p className="font-mono text-xs text-muted-foreground uppercase">Date</p>
-          <p className="font-bold mt-1">
-            {data.date || <span className="text-muted-foreground/40">—</span>}
-          </p>
-        </div>
-        <div className="brutal-border p-3 bg-muted/30">
-          <p className="font-mono text-xs text-muted-foreground uppercase">Venue</p>
-          <p className="font-bold mt-1">
-            {data.venue || <span className="text-muted-foreground/40">—</span>}
-          </p>
-        </div>
-        <div className="brutal-border p-3 bg-muted/30">
-          <p className="font-mono text-xs text-muted-foreground uppercase">Budget</p>
-          <p className="font-bold mt-1">
-            {data.budget ? `₹${data.budget}` : <span className="text-muted-foreground/40">—</span>}
-          </p>
-        </div>
-      </div>
-
-      {/* Authority */}
-      <div className="mb-6">
-        <p className="font-mono text-xs text-muted-foreground uppercase mb-1">
-          Submitted To
-        </p>
-        <p className="font-bold text-base">
-          {data.authority || (
-            <span className="text-muted-foreground/40">Authority Name</span>
-          )}
-        </p>
-      </div>
-
-      {/* Objective */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-6 h-6 bg-accent brutal-border flex items-center justify-center">
-            <span className="text-accent-foreground text-xs font-bold">01</span>
-          </div>
-          <h4 className="font-bold uppercase text-sm">Objective</h4>
-        </div>
-        <p className="text-muted-foreground pl-8">
-          {data.objective || (
-            <span className="text-muted-foreground/30 italic">
-              Describe the main objective of this event...
-            </span>
-          )}
-        </p>
-      </div>
-
-      {/* Description */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-6 h-6 bg-primary brutal-border flex items-center justify-center">
-            <span className="text-primary-foreground text-xs font-bold">02</span>
-          </div>
-          <h4 className="font-bold uppercase text-sm">Description</h4>
-        </div>
-        <p className="text-muted-foreground pl-8 whitespace-pre-wrap">
-          {data.description || (
-            <span className="text-muted-foreground/30 italic">
-              Provide a detailed description of the event, including activities,
-              schedule, and expected outcomes...
-            </span>
-          )}
-        </p>
-      </div>
-
-      {/* Footer */}
-      <div className="mt-10 pt-4 border-t-2 border-foreground flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-8 bg-primary" />
-          <div className="h-3 w-5 bg-secondary" />
-          <div className="h-3 w-3 bg-accent" />
-        </div>
-        <p className="font-mono text-xs text-muted-foreground">
-          Generated by DocuPrint
-        </p>
-      </div>
-    </div>
-  );
+  eventSummary: "",
+  keyPoints: "",
 };
 
 const ProposalGenerator = () => {
-  const [data, setData] = useState<ProposalData>(emptyProposal);
+  const [data, setData] = useState<ProposalData>(initialState);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedFile, setGeneratedFile] = useState<{ fileName: string; pdfBase64: string } | null>(null);
+  const [status, setStatus] = useState("");
 
   const update = (field: keyof ProposalData, value: string) => {
-    setData((prev) => ({ ...prev, [field]: value }));
+    setData((previous) => ({ ...previous, [field]: value }));
   };
 
-  const handleExport = () => {
-    const content = `
-EVENT PROPOSAL
-==============
-Event: ${data.eventName}
-Organizer: ${data.organizer}
-Date: ${data.date}
-Venue: ${data.venue}
-Authority: ${data.authority}
-Budget: ₹${data.budget}
+  const generateProposal = async () => {
+    setIsGenerating(true);
+    setStatus("");
 
-OBJECTIVE
-${data.objective}
-
-DESCRIPTION
-${data.description}
-
----
-Generated by DocuPrint
-    `.trim();
-
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.eventName || "proposal"}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const response = await api.generateProposal({
+        ...data,
+        keyPoints: data.keyPoints
+          .split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      });
+      setGeneratedFile(response);
+      setStatus("Proposal PDF generated successfully.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to generate proposal.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const fields: {
-    key: keyof ProposalData;
-    label: string;
-    icon: typeof FileText;
-    placeholder: string;
-    textarea?: boolean;
-  }[] = [
-    { key: "eventName", label: "Event Name", icon: FileText, placeholder: "Annual Tech Symposium" },
-    { key: "organizer", label: "Organizer", icon: Building2, placeholder: "Computer Science Dept." },
-    { key: "date", label: "Date", icon: Calendar, placeholder: "March 15, 2026" },
-    { key: "venue", label: "Venue", icon: MapPin, placeholder: "Main Auditorium" },
-    { key: "authority", label: "Submitted To", icon: Users, placeholder: "Dr. Principal" },
-    { key: "budget", label: "Budget (₹)", icon: FileText, placeholder: "25000" },
-    { key: "objective", label: "Objective", icon: FileText, placeholder: "To promote awareness...", textarea: true },
-    { key: "description", label: "Description", icon: FileText, placeholder: "This event will feature...", textarea: true },
+  const handleDownload = () => {
+    if (!generatedFile) {
+      return;
+    }
+
+    downloadBase64Pdf(generatedFile.pdfBase64, generatedFile.fileName);
+  };
+
+  const previewRows = [
+    ["College", data.collegeName || "College Name"],
+    ["Club", data.clubName || "Club Name"],
+    ["Authority", data.authorityName || "Authority Name"],
+    ["Date", data.eventDate || "Event date"],
+    ["Venue", data.venue || "Venue"],
+    ["Budget", data.budget ? `Rs. ${data.budget}` : "Not set"],
   ];
 
   return (
     <div className="min-h-screen p-6 md:p-10">
-      {/* Header */}
-      <motion.header
-        className="flex items-center justify-between mb-8"
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-      >
+      <motion.header className="mb-8 flex items-center justify-between" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
         <div className="flex items-center gap-4">
-          <a href="/dashboard" className="brutal-btn-outline py-2 px-3 flex items-center gap-1 text-xs">
-            <ArrowLeft className="w-4 h-4" strokeWidth={3} />
+          <a href="/dashboard" className="brutal-btn-outline flex items-center gap-1 px-3 py-2 text-xs">
+            <ArrowLeft className="h-4 w-4" strokeWidth={3} />
             Back
           </a>
           <h1 className="text-xl font-bold uppercase tracking-tight">Proposal Generator</h1>
         </div>
-        <button onClick={handleExport} className="brutal-btn-primary flex items-center gap-2 py-2">
-          <Download className="w-4 h-4" strokeWidth={3} />
-          Export
-        </button>
+        <div className="flex gap-3">
+          <button onClick={generateProposal} className="brutal-btn-primary flex items-center gap-2 py-2" disabled={isGenerating}>
+            {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={2.5} /> : <FileText className="h-4 w-4" strokeWidth={3} />}
+            Generate PDF
+          </button>
+          <button onClick={handleDownload} className="brutal-btn-secondary flex items-center gap-2 py-2" disabled={!generatedFile}>
+            <Download className="h-4 w-4" strokeWidth={3} />
+            Download
+          </button>
+        </div>
       </motion.header>
 
-      {/* Split Screen */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Form */}
-        <motion.div
-          className="space-y-4"
-          initial={{ x: -30, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.1 }}
-        >
-          <div className="brutal-border bg-muted/30 p-1.5 inline-block mb-2">
-            <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              Input Fields
-            </span>
-          </div>
-          {fields.map((f) => (
-            <div key={f.key}>
-              <label className="font-bold text-xs uppercase tracking-wider mb-1.5 flex items-center gap-2">
-                <f.icon className="w-3.5 h-3.5" strokeWidth={2.5} />
-                {f.label}
-              </label>
-              {f.textarea ? (
-                <textarea
-                  className="brutal-input min-h-[100px] resize-y"
-                  placeholder={f.placeholder}
-                  value={data[f.key]}
-                  onChange={(e) => update(f.key, e.target.value)}
-                />
-              ) : (
-                <input
-                  type="text"
-                  className="brutal-input"
-                  placeholder={f.placeholder}
-                  value={data[f.key]}
-                  onChange={(e) => update(f.key, e.target.value)}
-                />
-              )}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <motion.div className="space-y-4" initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
+          {[
+            ["collegeName", "College Name", "Pimpri Chinchwad College of Engineering"],
+            ["collegeAddress", "College Address", "Nigdi, Pune, Maharashtra"],
+            ["clubName", "Club Name", "Coding Club"],
+            ["authorityName", "Addressed To", "The Principal"],
+            ["eventTitle", "Event Title", "AI Innovation Summit"],
+            ["subject", "Subject", "Proposal for AI Innovation Summit"],
+            ["targetAudience", "Target Audience", "Second year and third year students"],
+            ["venue", "Venue", "Seminar Hall A"],
+            ["budget", "Estimated Budget", "35000"],
+          ].map(([key, label, placeholder]) => (
+            <div key={key}>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">{label}</label>
+              <input
+                className="brutal-input"
+                placeholder={placeholder}
+                value={data[key as keyof ProposalData]}
+                onChange={(event) => update(key as keyof ProposalData, event.target.value)}
+              />
             </div>
           ))}
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Event Date</label>
+            <input className="brutal-input" type="date" value={data.eventDate} onChange={(event) => update("eventDate", event.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Objective</label>
+            <textarea className="brutal-input min-h-[96px] resize-y" value={data.objective} onChange={(event) => update("objective", event.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Event Summary</label>
+            <textarea className="brutal-input min-h-[120px] resize-y" value={data.eventSummary} onChange={(event) => update("eventSummary", event.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Key Points</label>
+            <textarea
+              className="brutal-input min-h-[100px] resize-y"
+              placeholder={"One point per line\nExpected outcomes\nRequired approvals"}
+              value={data.keyPoints}
+              onChange={(event) => update("keyPoints", event.target.value)}
+            />
+          </div>
+          {status ? <p className="font-mono text-xs text-muted-foreground">{status}</p> : null}
         </motion.div>
 
-        {/* Right: Live Preview */}
-        <motion.div
-          className="sticky top-6"
-          initial={{ x: 30, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <div className="brutal-border bg-muted/30 p-1.5 inline-block mb-4">
-            <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              Live Preview
-            </span>
-          </div>
-          <div className="max-h-[80vh] overflow-y-auto">
-            <ProposalPreview data={data} />
+        <motion.div className="sticky top-6" initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
+          <div className="brutal-card min-h-[620px] space-y-6">
+            <div className="border-b-2 border-foreground pb-5">
+              <p className="font-mono text-xs uppercase tracking-[0.3em] text-muted-foreground">Proposal Preview</p>
+              <h2 className="mt-3 text-2xl font-bold uppercase">{data.eventTitle || "Event Proposal"}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{data.subject || "Generated subject line will appear here."}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {previewRows.map(([label, value]) => (
+                <div key={label} className="brutal-border bg-muted/20 p-3">
+                  <p className="font-mono text-[10px] uppercase text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-sm font-bold">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider">Objective</p>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">{data.objective || "State the event objective so the generated document can turn it into a formal proposal body."}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider">Summary</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{data.eventSummary || "Add the short event brief, audience, and what approval is needed."}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider">Key Points</p>
+              <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+                {data.keyPoints
+                  .split("\n")
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+                  .map((item) => (
+                    <p key={item}>- {item}</p>
+                  ))}
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -281,23 +199,3 @@ Generated by DocuPrint
 };
 
 export default ProposalGenerator;
-
-import { supabase } from "@/lib/supabase"
-
-async function saveEvent() {
-  const { data, error } = await supabase.from("events").insert([
-    {
-      event_name: "Tech Fest",
-      date: "2026-04-10",
-      venue: "Auditorium",
-      total_budget: 5000,
-      total_attendees: 100
-    }
-  ])
-
-  console.log(data, error)
-}
-
-<button onClick={saveEvent}>
-  Save Event
-</button>

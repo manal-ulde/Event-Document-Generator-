@@ -1,359 +1,141 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Sparkles, Download, RefreshCw, Palette, Zap, BookOpen } from "lucide-react";
+import { motion } from "framer-motion";
+import { ArrowLeft, LoaderCircle, Palette, Sparkles } from "lucide-react";
+import { api } from "@/lib/api";
 
-const stylePresets = [
-  {
-    id: "modern",
-    name: "Modern Tech",
-    icon: Zap,
-    colors: { bg: "bg-foreground", text: "text-primary-foreground", accent: "bg-primary" },
-    description: "Clean lines, bold typography",
-  },
-  {
-    id: "classic",
-    name: "Classic Formal",
-    icon: BookOpen,
-    colors: { bg: "bg-card", text: "text-foreground", accent: "bg-secondary" },
-    description: "Elegant, traditional layout",
-  },
-  {
-    id: "vibrant",
-    name: "Vibrant Pop",
-    icon: Palette,
-    colors: { bg: "bg-primary", text: "text-primary-foreground", accent: "bg-secondary" },
-    description: "Bold colors, maximum impact",
-  },
-];
-
-type GenerationState = "idle" | "generating" | "done";
-
-const LoadingAnimation = () => (
-  <div className="flex flex-col items-center justify-center py-20">
-    <motion.div
-      className="relative w-32 h-32"
-      animate={{ rotate: 360 }}
-      transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-    >
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <motion.div
-          key={i}
-          className="absolute w-6 h-6 brutal-border"
-          style={{
-            top: `${50 + 40 * Math.sin((i * Math.PI * 2) / 6) - 12}%`,
-            left: `${50 + 40 * Math.cos((i * Math.PI * 2) / 6) - 12}%`,
-          }}
-          animate={{
-            backgroundColor: [
-              "hsl(265 85% 55%)",
-              "hsl(25 95% 55%)",
-              "hsl(165 70% 45%)",
-              "hsl(265 85% 55%)",
-            ],
-            scale: [1, 1.3, 1],
-          }}
-          transition={{
-            duration: 1.5,
-            repeat: Infinity,
-            delay: i * 0.2,
-          }}
-        />
-      ))}
-    </motion.div>
-    <motion.p
-      className="font-mono text-sm text-muted-foreground uppercase tracking-widest mt-8"
-      animate={{ opacity: [0.4, 1, 0.4] }}
-      transition={{ duration: 1.5, repeat: Infinity }}
-    >
-      AI is designing your flyer...
-    </motion.p>
-  </div>
-);
-
-const GeneratedFlyer = ({
-  data,
-  style,
-}: {
-  data: { title: string; date: string; venue: string; details: string };
-  style: typeof stylePresets[0];
-}) => (
-  <motion.div
-    className={`${style.colors.bg} ${style.colors.text} brutal-border p-8 min-h-[500px] flex flex-col justify-between`}
-    initial={{ scale: 0.9, opacity: 0, rotateY: -10 }}
-    animate={{ scale: 1, opacity: 1, rotateY: 0 }}
-    transition={{ duration: 0.6, ease: "easeOut" }}
-  >
-    <div>
-      <motion.div
-        className={`${style.colors.accent} brutal-border w-16 h-16 flex items-center justify-center mb-6`}
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ delay: 0.3, type: "spring" }}
-      >
-        <Sparkles className="w-8 h-8" strokeWidth={2.5} />
-      </motion.div>
-      <motion.h2
-        className="text-4xl font-bold uppercase leading-tight mb-4"
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.2 }}
-      >
-        {data.title || "Event Title"}
-      </motion.h2>
-      <motion.p
-        className="opacity-80 text-lg max-w-sm"
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 0.8 }}
-        transition={{ delay: 0.3 }}
-      >
-        {data.details || "Event details will appear here"}
-      </motion.p>
-    </div>
-    <motion.div
-      className="flex items-end justify-between mt-8"
-      initial={{ y: 20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ delay: 0.4 }}
-    >
-      <div>
-        <p className="font-mono text-sm opacity-60 uppercase">Date</p>
-        <p className="font-bold text-lg">{data.date || "TBD"}</p>
-      </div>
-      <div className="text-right">
-        <p className="font-mono text-sm opacity-60 uppercase">Venue</p>
-        <p className="font-bold text-lg">{data.venue || "TBD"}</p>
-      </div>
-    </motion.div>
-  </motion.div>
-);
+const stylePresets = ["Minimal Modern", "Festive College", "Clean Corporate", "Bold Youth"];
 
 const FlyerGenerator = () => {
-  const [selectedStyle, setSelectedStyle] = useState(stylePresets[0]);
-  const [state, setState] = useState<GenerationState>("idle");
   const [formData, setFormData] = useState({
-    title: "",
+    clubName: "",
+    theme: "",
+    style: stylePresets[0],
+    eventTitle: "",
     date: "",
     venue: "",
     details: "",
+    contactNumbers: "",
+    summary: "",
   });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [result, setResult] = useState<{ prompt?: string; creativeBrief?: string; message?: string; status?: string } | null>(null);
+  const [status, setStatus] = useState("");
 
-  const update = (key: string, value: string) =>
-    setFormData((p) => ({ ...p, [key]: value }));
-
-  const generate = () => {
-    setState("generating");
-    setTimeout(() => setState("done"), 2500);
+  const update = (field: keyof typeof formData, value: string) => {
+    setFormData((previous) => ({ ...previous, [field]: value }));
   };
 
-  const handleDownload = () => {
-    const el = document.getElementById("flyer-preview");
-    if (!el) return;
-    // Simple text export
-    const content = `
-${formData.title.toUpperCase()}
-Style: ${selectedStyle.name}
-Date: ${formData.date}
-Venue: ${formData.venue}
-Details: ${formData.details}
----
-Generated by DocuPrint AI
-    `.trim();
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${formData.title || "flyer"}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const generateFlyer = async () => {
+    setIsGenerating(true);
+    setStatus("");
+
+    try {
+      const response = await api.generateFlyer({
+        ...formData,
+        contactNumbers: formData.contactNumbers
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      });
+      setResult(response);
+      setStatus(response.status === "mocked" ? "Prompt generated. Add a Gemini API key to get live model output." : "Flyer prompt prepared successfully.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to prepare flyer prompt.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
     <div className="min-h-screen p-6 md:p-10">
-      <motion.header
-        className="flex items-center justify-between mb-8"
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-      >
+      <motion.header className="mb-8 flex items-center justify-between" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
         <div className="flex items-center gap-4">
-          <a href="/dashboard" className="brutal-btn-outline py-2 px-3 flex items-center gap-1 text-xs">
-            <ArrowLeft className="w-4 h-4" strokeWidth={3} />
+          <a href="/dashboard" className="brutal-btn-outline flex items-center gap-1 px-3 py-2 text-xs">
+            <ArrowLeft className="h-4 w-4" strokeWidth={3} />
             Back
           </a>
-          <h1 className="text-xl font-bold uppercase tracking-tight">
-            <Sparkles className="w-5 h-5 inline mr-2 text-primary" strokeWidth={2.5} />
-            Flyer Generator
-          </h1>
+          <h1 className="text-xl font-bold uppercase tracking-tight">Flyer Generator</h1>
         </div>
+        <button onClick={generateFlyer} className="brutal-btn-primary flex items-center gap-2 py-2" disabled={isGenerating}>
+          {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={2.5} /> : <Sparkles className="h-4 w-4" strokeWidth={3} />}
+          Build Prompt
+        </button>
       </motion.header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left: Controls */}
-        <motion.div
-          className="space-y-6"
-          initial={{ x: -30, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.1 }}
-        >
-          {/* Style Presets */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <motion.div className="space-y-4" initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
           <div>
-            <div className="brutal-border bg-muted/30 p-1.5 inline-block mb-4">
-              <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-                Style Preset
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {stylePresets.map((preset) => (
-                <motion.button
-                  key={preset.id}
-                  onClick={() => setSelectedStyle(preset)}
-                  className={`brutal-card p-4 text-left cursor-pointer transition-all ${
-                    selectedStyle.id === preset.id
-                      ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
-                      : ""
-                  }`}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <div className={`w-8 h-8 ${preset.colors.accent} brutal-border flex items-center justify-center mb-2`}>
-                    <preset.icon className="w-4 h-4 text-primary-foreground" strokeWidth={2.5} />
-                  </div>
-                  <p className="font-bold text-xs uppercase">{preset.name}</p>
-                  <p className="font-mono text-[10px] text-muted-foreground mt-0.5">
-                    {preset.description}
-                  </p>
-                </motion.button>
-              ))}
-            </div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Club Name</label>
+            <input className="brutal-input" value={formData.clubName} onChange={(event) => update("clubName", event.target.value)} />
           </div>
-
-          {/* Form */}
-          <div className="space-y-3">
-            <div className="brutal-border bg-muted/30 p-1.5 inline-block mb-2">
-              <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-                Event Details
-              </span>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Theme</label>
+              <input className="brutal-input" value={formData.theme} onChange={(event) => update("theme", event.target.value)} />
             </div>
             <div>
-              <label className="font-bold text-xs uppercase tracking-wider mb-1.5 block">Event Title</label>
-              <input
-                className="brutal-input"
-                placeholder="Spring Hackathon 2026"
-                value={formData.title}
-                onChange={(e) => update("title", e.target.value)}
-              />
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Style</label>
+              <select className="brutal-input" value={formData.style} onChange={(event) => update("style", event.target.value)}>
+                {stylePresets.map((preset) => (
+                  <option key={preset} value={preset}>
+                    {preset}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="font-bold text-xs uppercase tracking-wider mb-1.5 block">Date</label>
-                <input
-                  className="brutal-input"
-                  placeholder="April 20, 2026"
-                  value={formData.date}
-                  onChange={(e) => update("date", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="font-bold text-xs uppercase tracking-wider mb-1.5 block">Venue</label>
-                <input
-                  className="brutal-input"
-                  placeholder="Tech Lab 301"
-                  value={formData.venue}
-                  onChange={(e) => update("venue", e.target.value)}
-                />
-              </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Event Title</label>
+            <input className="brutal-input" value={formData.eventTitle} onChange={(event) => update("eventTitle", event.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Date</label>
+              <input className="brutal-input" value={formData.date} onChange={(event) => update("date", event.target.value)} />
             </div>
             <div>
-              <label className="font-bold text-xs uppercase tracking-wider mb-1.5 block">Details</label>
-              <textarea
-                className="brutal-input min-h-[80px] resize-y"
-                placeholder="Join us for a 24-hour coding marathon..."
-                value={formData.details}
-                onChange={(e) => update("details", e.target.value)}
-              />
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Venue</label>
+              <input className="brutal-input" value={formData.venue} onChange={(event) => update("venue", event.target.value)} />
             </div>
           </div>
-
-          <div className="flex gap-3">
-            <button onClick={generate} className="brutal-btn-primary flex items-center gap-2 flex-1">
-              <Sparkles className="w-4 h-4" strokeWidth={3} />
-              {state === "done" ? "Regenerate" : "Generate Flyer"}
-            </button>
-            {state === "done" && (
-              <motion.button
-                onClick={handleDownload}
-                className="brutal-btn-secondary flex items-center gap-2"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring" }}
-              >
-                <Download className="w-4 h-4" strokeWidth={3} />
-                Export
-              </motion.button>
-            )}
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Contact Numbers</label>
+            <input className="brutal-input" placeholder="9876543210, 9123456780" value={formData.contactNumbers} onChange={(event) => update("contactNumbers", event.target.value)} />
           </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Details</label>
+            <textarea className="brutal-input min-h-[110px] resize-y" value={formData.details} onChange={(event) => update("details", event.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Short Summary</label>
+            <textarea className="brutal-input min-h-[90px] resize-y" value={formData.summary} onChange={(event) => update("summary", event.target.value)} />
+          </div>
+          {status ? <p className="font-mono text-xs text-muted-foreground">{status}</p> : null}
         </motion.div>
 
-        {/* Right: Preview */}
-        <motion.div
-          initial={{ x: 30, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <div className="brutal-border bg-muted/30 p-1.5 inline-block mb-4">
-            <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              Preview
-            </span>
-          </div>
-          <div id="flyer-preview">
-            <AnimatePresence mode="wait">
-              {state === "generating" ? (
-                <motion.div
-                  key="loading"
-                  className="brutal-border bg-card"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                >
-                  <LoadingAnimation />
-                </motion.div>
-              ) : state === "done" ? (
-                <GeneratedFlyer
-                  key="flyer"
-                  data={formData}
-                  style={selectedStyle}
-                />
-              ) : (
-                <motion.div
-                  key="empty"
-                  className="brutal-border bg-card p-12 min-h-[400px] flex flex-col items-center justify-center"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                >
-                  <div className="w-16 h-16 bg-muted brutal-border flex items-center justify-center mb-4">
-                    <Sparkles className="w-8 h-8 text-muted-foreground" strokeWidth={2} />
-                  </div>
-                  <p className="font-bold uppercase text-muted-foreground text-center">
-                    Fill in details & generate
-                  </p>
-                  <p className="font-mono text-xs text-muted-foreground mt-1">
-                    AI will create your flyer design
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+        <motion.div className="space-y-6" initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
+          <div className="brutal-card">
+            <div className="flex items-center gap-3">
+              <div className="brutal-border flex h-10 w-10 items-center justify-center bg-primary">
+                <Palette className="h-5 w-5 text-primary-foreground" strokeWidth={2.5} />
+              </div>
+              <div>
+                <p className="font-mono text-xs uppercase tracking-[0.3em] text-muted-foreground">Prompt Builder</p>
+                <p className="text-sm text-muted-foreground">This backend route turns form data into a Gemini-ready flyer generation prompt.</p>
+              </div>
+            </div>
           </div>
 
-          {state === "done" && (
-            <motion.button
-              onClick={generate}
-              className="brutal-btn-outline mt-4 flex items-center gap-2 w-full justify-center"
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.5 }}
-            >
-              <RefreshCw className="w-4 h-4" strokeWidth={3} />
-              Try Different Style
-            </motion.button>
-          )}
+          <div className="brutal-card min-h-[420px] space-y-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider">Generated Prompt</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{result?.prompt || "Submit the flyer details to get a production-ready prompt for Gemini image generation."}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider">Creative Brief</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{result?.creativeBrief || result?.message || "When a Gemini API key is configured, the backend also produces a concise creative brief to feed into the image pipeline."}</p>
+            </div>
+          </div>
         </motion.div>
       </div>
     </div>
