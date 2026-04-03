@@ -1,5 +1,7 @@
 import { format } from "date-fns";
+import { api, base64PdfToObjectUrl, downloadBase64Pdf } from "@/lib/api";
 import { StoredBudgetRecord } from "@/lib/budgetStorage";
+import { COLLEGE_BRAND } from "@/lib/clubs";
 
 const downloadBlob = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);
@@ -25,30 +27,60 @@ const flattenRows = (records: StoredBudgetRecord[]) =>
     }))
   );
 
-export const createBudgetPdfObjectUrl = async (records: StoredBudgetRecord[]) => {
-  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
-  const pdf = await PDFDocument.create();
-  const page = pdf.addPage([842, 595]);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const { height } = page.getSize();
+const assetUrlToDataUrl = async (assetPath?: string) => {
+  if (!assetPath) {
+    return "";
+  }
 
-  page.drawText("College Budget Report", { x: 42, y: height - 42, size: 24, font: bold, color: rgb(0.09, 0.09, 0.1) });
-  page.drawText(`Generated ${format(new Date(), "dd MMM yyyy, hh:mm a")}`, { x: 42, y: height - 62, size: 10, font, color: rgb(0.4, 0.42, 0.45) });
+  try {
+    const response = await fetch(assetPath);
+    if (!response.ok) {
+      return "";
+    }
 
-  let y = height - 100;
-  flattenRows(records).slice(0, 20).forEach((row) => {
-    page.drawText(String(row.Event).slice(0, 18), { x: 42, y, size: 9, font });
-    page.drawText(String(row.ExpenseTitle).slice(0, 24), { x: 180, y, size: 9, font });
-    page.drawText(String(row.Date).slice(0, 14), { x: 365, y, size: 9, font });
-    page.drawText(String(row.PaymentMethod).slice(0, 14), { x: 485, y, size: 9, font });
-    page.drawText(String(row.ExpenseID).slice(0, 12), { x: 620, y, size: 9, font });
-    page.drawText(String(row.Amount), { x: 735, y, size: 9, font: bold });
-    y -= 18;
-  });
+    const blob = await response.blob();
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return "";
+  }
+};
 
-  const bytes = await pdf.save();
-  return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+const resolveLogoAsset = async (basePath?: string) => {
+  if (!basePath) {
+    return "";
+  }
+
+  const candidates = [".png", ".jpg", ".jpeg", ".webp"].map((extension) => `${basePath}${extension}`);
+  for (const candidate of candidates) {
+    const value = await assetUrlToDataUrl(candidate);
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+};
+
+const buildBudgetReportPayload = async (records: StoredBudgetRecord[], title?: string) => {
+  const collegeLogo = await resolveLogoAsset(COLLEGE_BRAND.logoBasePath);
+  return {
+    records,
+    title: title || (records.length === 1 ? `${records[0].title} Budget Report` : "College Budget Expenditure Report"),
+    date: records.length === 1 ? records[0].date : new Date().toISOString(),
+    collegeName: COLLEGE_BRAND.name,
+    collegeAddress: COLLEGE_BRAND.address,
+    collegeAcronym: COLLEGE_BRAND.acronym,
+    collegeBrandColor: COLLEGE_BRAND.hex,
+    collegeLogo,
+  };
+};
+
+export const createBudgetPdfObjectUrl = async (records: StoredBudgetRecord[], title?: string) => {
+  const response = await api.generateBudgetReport(await buildBudgetReportPayload(records, title));
+  return base64PdfToObjectUrl(response.pdfBase64);
 };
 
 export const exportBudgetExcel = async (records: StoredBudgetRecord[]) => {
@@ -59,10 +91,7 @@ export const exportBudgetExcel = async (records: StoredBudgetRecord[]) => {
   XLSX.writeFile(workbook, `budget-report-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
 };
 
-export const exportBudgetPdf = async (records: StoredBudgetRecord[]) => {
-  const url = await createBudgetPdfObjectUrl(records);
-  const response = await fetch(url);
-  const blob = await response.blob();
-  downloadBlob(blob, `budget-report-${format(new Date(), "yyyy-MM-dd")}.pdf`);
-  URL.revokeObjectURL(url);
+export const exportBudgetPdf = async (records: StoredBudgetRecord[], title?: string) => {
+  const response = await api.generateBudgetReport(await buildBudgetReportPayload(records, title));
+  downloadBase64Pdf(response.pdfBase64, response.fileName || `budget-report-${format(new Date(), "yyyy-MM-dd")}.pdf`);
 };

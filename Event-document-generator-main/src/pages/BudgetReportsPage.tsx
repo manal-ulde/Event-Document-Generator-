@@ -60,7 +60,7 @@ const BudgetReportsPage = () => {
             <div className="mt-6 flex flex-wrap gap-3">
               <button
                 onClick={async () => {
-                  const url = await createBudgetPdfObjectUrl([record]);
+                  const url = await createBudgetPdfObjectUrl([record], `${record.title} Budget Report`);
                   setPreviewUrl(url);
                   setPreviewTitle(`${record.title} Report Preview`);
                 }}
@@ -71,7 +71,7 @@ const BudgetReportsPage = () => {
               </button>
               <button
                 onClick={async () => {
-                  await exportBudgetPdf([record]);
+                  await exportBudgetPdf([record], `${record.title} Budget Report`);
                   toast.success(`${record.title} report exported.`);
                 }}
                 className="brutal-btn-outline flex items-center gap-2 px-4 py-3"

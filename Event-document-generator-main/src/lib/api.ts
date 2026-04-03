@@ -56,6 +56,11 @@ export const api = {
       body,
     }),
   generateReport: (body: unknown) => requestJson<{ fileName: string; pdfBase64: string; summary: Record<string, unknown> }>("/documents/report", { method: "POST", body }),
+  generateBudgetReport: (body: unknown) =>
+    requestJson<{ fileName: string; pdfBase64: string; summary: Record<string, unknown> }>("/documents/budget-report", {
+      method: "POST",
+      body,
+    }),
   generateFlyer: (body: unknown) =>
     requestJson<{ prompt: string; provider: string; status: string; message?: string; creativeBrief?: string; imageBase64?: string | null }>("/flyers/generate", {
       method: "POST",
