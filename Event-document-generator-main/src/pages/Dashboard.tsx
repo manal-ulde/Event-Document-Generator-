@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { FileText, Image, BarChart3, Users, Sparkles, ArrowRight, Calendar } from "lucide-react";
+import { FileText, Image, BarChart3, Users, Sparkles, ArrowRight, Calendar, Wallet, ListChecks, FileBarChart } from "lucide-react";
 
 const features = [
   {
@@ -35,12 +35,36 @@ const features = [
     href: "/generate/report",
   },
   {
+    title: "Budget",
+    description: "Estimate budgets, contingency, and cost-per-head insights",
+    icon: Wallet,
+    color: "bg-secondary",
+    span: "col-span-1",
+    href: "/generate/budget",
+  },
+  {
+    title: "Timeline",
+    description: "Build milestone-based event activity timelines",
+    icon: ListChecks,
+    color: "bg-accent",
+    span: "col-span-1",
+    href: "/generate/timeline",
+  },
+  {
     title: "Attendance",
     description: "Upload rosters, mark attendance, export sheets",
     icon: Users,
     color: "bg-primary",
-    span: "col-span-2",
+    span: "col-span-1",
     href: "/generate/attendance",
+  },
+  {
+    title: "Summary",
+    description: "Compile post-event analytics, highlights, and recommendations",
+    icon: FileBarChart,
+    color: "bg-primary",
+    span: "col-span-2",
+    href: "/generate/summary",
   },
 ];
 

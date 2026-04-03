@@ -6,9 +6,7 @@ const PAGE = {
   margin: 48,
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
+const currencyNumberFormatter = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 0,
 });
 
@@ -17,7 +15,7 @@ const percentageFormatter = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 1,
 });
 
-export const formatCurrency = (amount) => currencyFormatter.format(Number(amount || 0));
+export const formatCurrency = (amount) => `Rs. ${currencyNumberFormatter.format(Number(amount || 0))}`;
 
 export const formatPercent = (value) => percentageFormatter.format(Number(value || 0));
 
