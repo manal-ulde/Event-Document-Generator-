@@ -61,7 +61,7 @@ const teamMembers = [
   },
 ];
 
-const footerLink = "https://www.pccoepune.com/";
+const footerLink = "https://www.pce.ac.in/";
 
 const introMotion = {
   hidden: { opacity: 0, y: 22 },
@@ -294,7 +294,7 @@ const SignUpForm = ({ onBackToIntro }: { onBackToIntro: () => void }) => {
     }
 
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -303,6 +303,8 @@ const SignUpForm = ({ onBackToIntro }: { onBackToIntro: () => void }) => {
           },
         },
       });
+
+      console.log("Sign up result:", { data, error }); // Add this for debugging
 
       setSubmitting(false);
       setStatus(error ? error.message : "Account created. Check your email if confirmation is enabled, then sign in.");
@@ -316,6 +318,8 @@ const SignUpForm = ({ onBackToIntro }: { onBackToIntro: () => void }) => {
       email,
       password,
     });
+
+    console.log("Sign in error:", error); // Add this for debugging
 
     setSubmitting(false);
     if (error) {
