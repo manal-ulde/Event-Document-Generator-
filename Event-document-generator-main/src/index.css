@@ -62,6 +62,11 @@
       linear-gradient(hsl(0 0% 0% / 0.04) 1px, transparent 1px),
       linear-gradient(90deg, hsl(0 0% 0% / 0.04) 1px, transparent 1px);
     background-size: 24px 24px;
+    min-width: 320px;
+  }
+
+  #root {
+    min-height: 100vh;
   }
 }
 
@@ -118,5 +123,24 @@
 
   .brutal-btn-outline {
     @apply brutal-btn bg-card text-foreground;
+  }
+}
+
+@media (hover: none) {
+  .brutal-card:hover,
+  .brutal-btn:hover {
+    box-shadow: var(--brutal-shadow);
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
