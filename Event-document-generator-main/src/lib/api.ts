@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8787/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 type JsonOptions = {
   method?: string;
@@ -7,14 +7,20 @@ type JsonOptions = {
 };
 
 async function requestJson<T>(path: string, options: JsonOptions = {}): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: options.method || "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: options.method || "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    throw new Error("Backend not reachable. Start the API server and try again.");
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
@@ -43,10 +49,16 @@ export const api = {
   parseAttendance: async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch(`${API_BASE}/attendance/parse`, {
-      method: "POST",
-      body: formData,
-    });
+    let response: Response;
+
+    try {
+      response = await fetch(`${API_BASE}/attendance/parse`, {
+        method: "POST",
+        body: formData,
+      });
+    } catch {
+      throw new Error("Backend not reachable. Start the API server and try again.");
+    }
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));

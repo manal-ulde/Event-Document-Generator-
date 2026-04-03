@@ -174,7 +174,12 @@ const ProposalGenerator = () => {
       setGeneratedFile(response);
       setStatus("Proposal PDF generated successfully. You can preview and download it below.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to generate proposal.");
+      const message = error instanceof Error ? error.message : "Failed to generate proposal.";
+      setStatus(
+        message.includes("Backend not reachable")
+          ? `${message} Run "npm run server" in the project root, then try again.`
+          : message
+      );
     } finally {
       setIsGenerating(false);
     }
