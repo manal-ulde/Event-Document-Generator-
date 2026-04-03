@@ -108,20 +108,40 @@ app.post("/api/attendance/parse", upload.single("file"), async (req, res, next) 
       return res.status(400).json({ message: "A CSV or Excel file is required." });
     }
 
-    const parsed = parseAttendanceFile(req.file.buffer, req.file.originalname);
+    const selectedYear = String(req.body?.year || "").trim();
+    const selectedBranch = String(req.body?.branch || "").trim();
+    const selectedDivision = String(req.body?.division || "").trim();
+    const parsed = parseAttendanceFile(req.file.buffer, req.file.originalname, {
+      selectedYear,
+      selectedBranch,
+      selectedDivision,
+    });
+    res.json(parsed);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/attendance/save", async (req, res, next) => {
+  try {
+    const students = Array.isArray(req.body?.students) ? req.body.students : [];
+    const metadata = req.body?.metadata && typeof req.body.metadata === "object" ? req.body.metadata : {};
+    const fileName = String(req.body?.fileName || metadata.sourceFile || "Uploaded roster");
+
+    if (students.length === 0) {
+      return res.status(400).json({ message: "There are no parsed students to save." });
+    }
+
     const roster = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      fileName: req.file.originalname,
+      fileName,
       uploadedAt: new Date().toISOString(),
-      students: parsed.students,
-      metadata: parsed.metadata,
+      students,
+      metadata,
     };
 
     await saveAttendanceRoster(roster);
-    res.json({
-      ...parsed,
-      roster,
-    });
+    res.json({ roster });
   } catch (error) {
     next(error);
   }

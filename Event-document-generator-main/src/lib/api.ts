@@ -127,9 +127,12 @@ export const api = {
 
     return response.json() as Promise<Record<string, unknown>>;
   },
-  parseAttendance: async (file: File) => {
+  parseAttendance: async (file: File, metadata?: { year?: string; branch?: string; division?: string }) => {
     const formData = new FormData();
     formData.append("file", file);
+    if (metadata?.year) formData.append("year", metadata.year);
+    if (metadata?.branch) formData.append("branch", metadata.branch);
+    if (metadata?.division) formData.append("division", metadata.division);
     let response: Response;
 
     try {
@@ -148,16 +151,19 @@ export const api = {
 
     return response.json() as Promise<{
       students: Array<{ id: string; srNo?: string; admissionNo?: string; seatNo?: string; name: string; roll: string; year?: string; branch?: string; division?: string; selected?: boolean }>;
-      metadata: { sourceFile: string; rowsParsed: number; extractedColumns?: string[]; years: string[]; branches: string[]; divisions: string[] };
+      metadata: { sourceFile: string; rowsParsed: number; extractedColumns?: string[]; years: string[]; branches: string[]; divisions: string[]; selectedYear?: string; selectedBranch?: string; selectedDivision?: string };
+    }>;
+  },
+  saveAttendanceRoster: (body: unknown) =>
+    requestJson<{
       roster: {
         id: string;
         fileName: string;
         uploadedAt: string;
         students: Array<{ id: string; srNo?: string; admissionNo?: string; seatNo?: string; name: string; roll: string; year?: string; branch?: string; division?: string; selected?: boolean }>;
-        metadata: { sourceFile: string; rowsParsed: number; extractedColumns?: string[]; years: string[]; branches: string[]; divisions: string[] };
+        metadata: { sourceFile: string; rowsParsed: number; extractedColumns?: string[]; years: string[]; branches: string[]; divisions: string[]; selectedYear?: string; selectedBranch?: string; selectedDivision?: string };
       };
-    }>;
-  },
+    }>("/attendance/save", { method: "POST", body }),
   getAttendanceRosters: () =>
     requestJson<{
       rosters: Array<{
@@ -165,7 +171,7 @@ export const api = {
         fileName: string;
         uploadedAt: string;
         students: Array<{ id: string; srNo?: string; admissionNo?: string; seatNo?: string; name: string; roll: string; year?: string; branch?: string; division?: string; selected?: boolean }>;
-        metadata: { sourceFile: string; rowsParsed: number; extractedColumns?: string[]; years: string[]; branches: string[]; divisions: string[] };
+        metadata: { sourceFile: string; rowsParsed: number; extractedColumns?: string[]; years: string[]; branches: string[]; divisions: string[]; selectedYear?: string; selectedBranch?: string; selectedDivision?: string };
       }>;
     }>("/attendance/rosters"),
   exportAttendance: (body: unknown) => requestJson<{ fileName: string; pdfBase64: string }>("/attendance/export", { method: "POST", body }),

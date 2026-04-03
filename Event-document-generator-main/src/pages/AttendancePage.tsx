@@ -1,8 +1,8 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Download, LoaderCircle, Upload } from "lucide-react";
+import { ArrowLeft, Download, LoaderCircle, Save, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api, downloadBase64Pdf } from "@/lib/api";
+import { api, base64PdfToObjectUrl, downloadBase64Pdf } from "@/lib/api";
 import { COLLEGE_BRAND } from "@/lib/clubs";
 
 interface Student {
@@ -29,10 +29,36 @@ interface RosterRecord {
     years: string[];
     branches: string[];
     divisions: string[];
+    selectedYear?: string;
+    selectedBranch?: string;
+    selectedDivision?: string;
   };
 }
 
-const normalizeStudent = (student: Partial<Student>, index: number): Student => ({
+interface ParsedRosterDraft {
+  fileName: string;
+  students: Student[];
+  metadata: RosterRecord["metadata"];
+}
+
+const YEAR_OPTIONS = [
+  { label: "First Year", value: "FY" },
+  { label: "Second Year", value: "SY" },
+  { label: "Third Year", value: "TY" },
+  { label: "Final Year", value: "B" },
+];
+
+const BRANCH_OPTIONS = [
+  "Computer Engineering",
+  "Mechanical Engineering",
+  "Information Technology",
+  "Electronics and Telecommunication",
+  "Automobile",
+];
+
+const DIVISION_OPTIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+
+const normalizeStudent = (student: Partial<Student> = {}, index: number): Student => ({
   id: String(student.id || index + 1),
   srNo: student.srNo ? String(student.srNo) : "",
   admissionNo: student.admissionNo ? String(student.admissionNo) : student.roll ? String(student.roll) : "",
@@ -44,7 +70,7 @@ const normalizeStudent = (student: Partial<Student>, index: number): Student => 
   selected: student.selected ?? true,
 });
 
-const normalizeRoster = (roster: Partial<RosterRecord>): RosterRecord => ({
+const normalizeRoster = (roster: Partial<RosterRecord> = {}): RosterRecord => ({
   id: String(roster.id || `${Date.now()}`),
   fileName: String(roster.fileName || "Uploaded roster"),
   uploadedAt: String(roster.uploadedAt || new Date().toISOString()),
@@ -56,6 +82,9 @@ const normalizeRoster = (roster: Partial<RosterRecord>): RosterRecord => ({
     years: Array.isArray(roster.metadata?.years) ? roster.metadata.years.map(String) : [],
     branches: Array.isArray(roster.metadata?.branches) ? roster.metadata.branches.map(String) : [],
     divisions: Array.isArray(roster.metadata?.divisions) ? roster.metadata.divisions.map(String) : [],
+    selectedYear: roster.metadata?.selectedYear ? String(roster.metadata.selectedYear) : "",
+    selectedBranch: roster.metadata?.selectedBranch ? String(roster.metadata.selectedBranch) : "",
+    selectedDivision: roster.metadata?.selectedDivision ? String(roster.metadata.selectedDivision) : "",
   },
 });
 
@@ -73,20 +102,18 @@ const AttendancePage = () => {
   const [status, setStatus] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
+  const [parsedDraft, setParsedDraft] = useState<ParsedRosterDraft | null>(null);
 
   useEffect(() => {
     const hydrate = async () => {
       try {
         const response = await api.getAttendanceRosters();
-        const rosterList = Array.isArray(response.rosters) ? response.rosters.map(normalizeRoster) : [];
+        const rosterList = Array.isArray(response.rosters)
+          ? response.rosters.filter(Boolean).map((roster) => normalizeRoster(roster || {}))
+          : [];
         setRosters(rosterList);
-        if (rosterList[0]) {
-          setSelectedRosterId(rosterList[0].id);
-          setStudents(rosterList[0].students);
-          setYear("");
-          setBranch("");
-          setDivision("");
-        }
       } catch {
         // Keep empty state if backend store is unavailable.
       }
@@ -95,18 +122,62 @@ const AttendancePage = () => {
     hydrate();
   }, []);
 
-  const selectedRoster = useMemo(
-    () => rosters.find((roster) => roster.id === selectedRosterId) || null,
-    [rosters, selectedRosterId]
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [pdfPreviewUrl]);
+
+  const selectionReady = Boolean(year && branch && division);
+
+  const matchingRosters = useMemo(
+    () =>
+      rosters.filter(
+        (roster) =>
+          roster.metadata.selectedYear === year &&
+          roster.metadata.selectedBranch === branch &&
+          roster.metadata.selectedDivision === division
+      ),
+    [branch, division, rosters, year]
   );
+
+  const selectedRoster = useMemo(
+    () => matchingRosters.find((roster) => roster.id === selectedRosterId) || null,
+    [matchingRosters, selectedRosterId]
+  );
+
+  useEffect(() => {
+    if (!selectionReady) {
+      setSelectedRosterId("");
+      setStudents([]);
+      return;
+    }
+
+    if (parsedDraft) {
+      setStudents(parsedDraft.students);
+      return;
+    }
+
+    if (matchingRosters.length === 0) {
+      setSelectedRosterId("");
+      setStudents([]);
+      return;
+    }
+
+    const roster = matchingRosters.find((entry) => entry.id === selectedRosterId) || matchingRosters[0];
+    setSelectedRosterId(roster.id);
+    setStudents(roster.students);
+  }, [matchingRosters, parsedDraft, selectedRosterId, selectionReady]);
 
   const filteredStudents = useMemo(
     () =>
       students.filter(
         (student) =>
-          (!year || student.year === year) &&
-          (!branch || student.branch === branch) &&
-          (!division || student.division === division)
+          (!year || !student.year || student.year === year) &&
+          (!branch || !student.branch || student.branch === branch) &&
+          (!division || !student.division || student.division === division)
       ),
     [branch, division, students, year]
   );
@@ -117,28 +188,76 @@ const AttendancePage = () => {
       return;
     }
 
+    if (!selectionReady) {
+      setStatus("Select year, branch, and division before uploading the roster.");
+      event.target.value = "";
+      return;
+    }
+
     setIsParsing(true);
     setStatus("");
 
     try {
-      const response = await api.parseAttendance(file);
-      const normalizedRoster = normalizeRoster(response.roster);
-      setStudents(normalizedRoster.students);
-      setRosters((previous) => [normalizedRoster, ...previous.filter((entry) => entry.id !== normalizedRoster.id)]);
-      setSelectedRosterId(normalizedRoster.id);
-      setYear("");
-      setBranch("");
-      setDivision("");
+      const response = await api.parseAttendance(file, { year, branch, division });
+      const nextStudents = Array.isArray(response.students)
+        ? response.students.map((student, index) => normalizeStudent(student, index))
+        : [];
+      const nextDraft: ParsedRosterDraft = {
+        fileName: file.name,
+        students: nextStudents,
+        metadata: {
+          sourceFile: response.metadata?.sourceFile || file.name,
+          rowsParsed: Number(response.metadata?.rowsParsed || nextStudents.length),
+          extractedColumns: Array.isArray(response.metadata?.extractedColumns) ? response.metadata.extractedColumns : [],
+          years: Array.isArray(response.metadata?.years) ? response.metadata.years : [],
+          branches: Array.isArray(response.metadata?.branches) ? response.metadata.branches : [],
+          divisions: Array.isArray(response.metadata?.divisions) ? response.metadata.divisions : [],
+          selectedYear: year,
+          selectedBranch: branch,
+          selectedDivision: division,
+        },
+      };
+      setParsedDraft(nextDraft);
+      setSelectedRosterId("");
+      setStudents(nextStudents);
       setStatus(
-        normalizedRoster.metadata.rowsParsed > 0
-          ? `Parsed ${normalizedRoster.metadata.rowsParsed} students from ${normalizedRoster.metadata.sourceFile}.`
-          : `No student rows were found in ${normalizedRoster.metadata.sourceFile}. Please check the file headers.`
+        nextDraft.metadata.rowsParsed > 0
+          ? `Parsed ${nextDraft.metadata.rowsParsed} students from ${nextDraft.metadata.sourceFile}. Review and click Save Roster to store it under ${year} / ${branch} / ${division}.`
+          : `No student rows were found in ${nextDraft.metadata.sourceFile}. Please check the file headers.`
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to parse file.");
     } finally {
       setIsParsing(false);
       event.target.value = "";
+    }
+  };
+
+  const saveParsedRoster = async () => {
+    if (!parsedDraft || parsedDraft.students.length === 0) {
+      setStatus("Upload and parse a roster before saving.");
+      return;
+    }
+
+    setIsSaving(true);
+    setStatus("");
+
+    try {
+      const response = await api.saveAttendanceRoster({
+        fileName: parsedDraft.fileName,
+        students: parsedDraft.students,
+        metadata: parsedDraft.metadata,
+      });
+      const savedRoster = normalizeRoster(response.roster || {});
+      setRosters((previous) => [savedRoster, ...previous.filter((entry) => entry.id !== savedRoster.id)]);
+      setSelectedRosterId(savedRoster.id);
+      setStudents(savedRoster.students);
+      setParsedDraft(null);
+      setStatus(`Saved roster under ${year} / ${branch} / ${division}.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to save roster.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -173,6 +292,10 @@ const AttendancePage = () => {
         division,
         students: filteredStudents.filter((student) => student.selected),
       });
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+      setPdfPreviewUrl(base64PdfToObjectUrl(response.pdfBase64));
       downloadBase64Pdf(response.pdfBase64, response.fileName);
       setStatus("Attendance sheet PDF exported successfully.");
     } catch (error) {
@@ -183,9 +306,6 @@ const AttendancePage = () => {
   };
 
   const selectedCount = filteredStudents.filter((student) => student.selected).length;
-  const filterYears = selectedRoster?.metadata.years || [];
-  const filterBranches = selectedRoster?.metadata.branches || [];
-  const filterDivisions = selectedRoster?.metadata.divisions || [];
 
   return (
     <div className="min-h-screen p-6 md:p-10">
@@ -197,7 +317,11 @@ const AttendancePage = () => {
           </Link>
           <h1 className="text-xl font-bold uppercase tracking-tight">Attendance Sheets</h1>
         </div>
-        <button onClick={exportAttendance} className="brutal-btn-primary flex items-center gap-2 py-2" disabled={filteredStudents.length === 0 || isExporting}>
+        <button
+          onClick={exportAttendance}
+          className="brutal-btn-primary flex items-center gap-2 py-2"
+          disabled={filteredStudents.length === 0 || isExporting}
+        >
           {isExporting ? <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={2.5} /> : <Download className="h-4 w-4" strokeWidth={3} />}
           Export PDF
         </button>
@@ -206,33 +330,96 @@ const AttendancePage = () => {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <motion.div className="space-y-4" initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
           <div className="brutal-card">
-            <label className="brutal-btn-secondary inline-flex cursor-pointer items-center gap-2">
-              <Upload className="h-4 w-4" strokeWidth={3} />
-              {isParsing ? "Parsing..." : "Upload CSV / Excel"}
-              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleUpload} />
-            </label>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Upload a CSV or Excel file with <span className="font-semibold">Sr.No</span>, <span className="font-semibold">Admission No</span>, and <span className="font-semibold">Name Of the Student</span>. The backend will convert it into a selectable roster.
-            </p>
-          {rosters.length > 0 ? (
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-muted-foreground">Academic Selection</p>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Year</label>
+                <select className="brutal-input" value={year} onChange={(event) => setYear(event.target.value)}>
+                  <option value="">Select year</option>
+                  {YEAR_OPTIONS.map((entry) => (
+                    <option key={entry.value} value={entry.value}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Branch</label>
+                <select className="brutal-input" value={branch} onChange={(event) => setBranch(event.target.value)}>
+                  <option value="">Select branch</option>
+                  {BRANCH_OPTIONS.map((entry) => (
+                    <option key={entry} value={entry}>
+                      {entry}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Division</label>
+                <select className="brutal-input" value={division} onChange={(event) => setDivision(event.target.value)}>
+                  <option value="">Select division</option>
+                  {DIVISION_OPTIONS.map((entry) => (
+                    <option key={entry} value={entry}>
+                      {entry}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-5 border-t-2 border-foreground/10 pt-5">
+              <div className="flex flex-wrap gap-3">
+                <label
+                  className={`inline-flex items-center gap-2 ${
+                    selectionReady
+                      ? "brutal-btn-secondary cursor-pointer"
+                      : "cursor-not-allowed border-2 border-foreground/20 bg-muted/40 px-4 py-3 text-muted-foreground"
+                  }`}
+                >
+                  <Upload className="h-4 w-4" strokeWidth={3} />
+                  {isParsing ? "Parsing..." : "Upload CSV / Excel"}
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    className="hidden"
+                    onChange={handleUpload}
+                    disabled={!selectionReady}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={saveParsedRoster}
+                  disabled={!parsedDraft || parsedDraft.students.length === 0 || isSaving}
+                  className="brutal-btn-primary inline-flex items-center gap-2 py-3 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSaving ? <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={2.5} /> : <Save className="h-4 w-4" strokeWidth={3} />}
+                  Save Roster
+                </button>
+              </div>
+              <p className="mt-4 text-sm text-muted-foreground">
+                First choose the year, branch, and division. Then upload a CSV or Excel file with{" "}
+                <span className="font-semibold">Roll No / Sr.No</span>, <span className="font-semibold">Admission Number</span>, and{" "}
+                <span className="font-semibold">Student</span> or <span className="font-semibold">Name Of the Student</span>.
+              </p>
+            </div>
+
+            {selectionReady && matchingRosters.length > 0 ? (
               <div className="mt-4">
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Saved Rosters</label>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Saved Rosters For Selected Class</label>
                 <select
                   className="brutal-input"
                   value={selectedRosterId}
                   onChange={(event) => {
                     const rosterId = event.target.value;
                     setSelectedRosterId(rosterId);
-                    const roster = rosters.find((entry) => entry.id === rosterId);
+                    setParsedDraft(null);
+                    const roster = matchingRosters.find((entry) => entry.id === rosterId);
                     if (roster) {
                       setStudents(roster.students);
-                      setYear("");
-                      setBranch("");
-                      setDivision("");
                     }
                   }}
                 >
-                  {rosters.map((roster) => (
+                  {matchingRosters.map((roster) => (
                     <option key={roster.id} value={roster.id}>
                       {roster.fileName}
                     </option>
@@ -251,41 +438,14 @@ const AttendancePage = () => {
             {[
               ["collegeName", collegeName, setCollegeName, "College Name"],
               ["collegeAddress", collegeAddress, setCollegeAddress, "College Address"],
-              ["clubName", clubName, setClubName, "Club Name"],
-              ["eventTitle", eventTitle, setEventTitle, "Event Title"],
+              ["clubName", clubName, setClubName, "Faculty / Club Name"],
+              ["eventTitle", eventTitle, setEventTitle, "Event Title / Subject"],
             ].map(([key, value, setter, label]) => (
               <div key={key}>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">{label}</label>
-                <input className="brutal-input" value={value as string} onChange={(event) => (setter as (value: string) => void)(event.target.value)} />
+                <input className="brutal-input" value={value as string} onChange={(event) => (setter as (nextValue: string) => void)(event.target.value)} />
               </div>
             ))}
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Year filter</label>
-              <select className="brutal-input" value={year} onChange={(event) => setYear(event.target.value)}>
-                <option value="">All years</option>
-                {filterYears.map((entry) => (
-                  <option key={entry}>{entry}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Branch filter</label>
-              <select className="brutal-input" value={branch} onChange={(event) => setBranch(event.target.value)}>
-                <option value="">All branches</option>
-                {filterBranches.map((entry) => (
-                  <option key={entry}>{entry}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Division filter</label>
-              <select className="brutal-input" value={division} onChange={(event) => setDivision(event.target.value)}>
-                <option value="">All divisions</option>
-                {filterDivisions.map((entry) => (
-                  <option key={entry}>{entry}</option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <div className="flex gap-3">
@@ -309,6 +469,15 @@ const AttendancePage = () => {
               </div>
             </div>
 
+            {pdfPreviewUrl ? (
+              <div className="mb-5 overflow-hidden border-2 border-foreground/10 bg-white">
+                <div className="border-b-2 border-foreground/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  PDF Preview
+                </div>
+                <iframe title="Attendance PDF Preview" src={pdfPreviewUrl} className="h-[360px] w-full bg-white" />
+              </div>
+            ) : null}
+
             <div className="max-h-[640px] overflow-y-auto">
               <div className="grid grid-cols-[52px_72px_160px_1fr] gap-3 border-b-2 border-foreground pb-3 text-xs font-bold uppercase tracking-wider">
                 <span>Select</span>
@@ -318,7 +487,11 @@ const AttendancePage = () => {
               </div>
               <div className="space-y-2 pt-3">
                 {filteredStudents.map((student) => (
-                  <button key={student.id} onClick={() => toggleStudent(student.id)} className="grid w-full grid-cols-[52px_72px_160px_1fr] gap-3 rounded-none border-2 border-foreground/15 bg-muted/10 p-3 text-left">
+                  <button
+                    key={student.id}
+                    onClick={() => toggleStudent(student.id)}
+                    className="grid w-full grid-cols-[52px_72px_160px_1fr] gap-3 rounded-none border-2 border-foreground/15 bg-muted/10 p-3 text-left"
+                  >
                     <span className="flex items-center">
                       <input
                         type="checkbox"
@@ -333,7 +506,11 @@ const AttendancePage = () => {
                     <span className="font-medium">{student.name}</span>
                   </button>
                 ))}
-                {filteredStudents.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">Upload a roster to start building the attendance sheet.</p> : null}
+                {filteredStudents.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Select the class details above and upload a roster to start building the attendance sheet.
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>

@@ -36,6 +36,9 @@ const normalizeRoster = (roster = {}) => ({
     years: Array.isArray(roster.metadata?.years) ? roster.metadata.years.map(String) : [],
     branches: Array.isArray(roster.metadata?.branches) ? roster.metadata.branches.map(String) : [],
     divisions: Array.isArray(roster.metadata?.divisions) ? roster.metadata.divisions.map(String) : [],
+    selectedYear: roster.metadata?.selectedYear ? String(roster.metadata.selectedYear) : "",
+    selectedBranch: roster.metadata?.selectedBranch ? String(roster.metadata.selectedBranch) : "",
+    selectedDivision: roster.metadata?.selectedDivision ? String(roster.metadata.selectedDivision) : "",
   },
 });
 
