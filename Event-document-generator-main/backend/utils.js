@@ -244,15 +244,19 @@ export const buildPdfDocument = async ({
   y -= 18;
 
   const addressText = collegeAddress || "College Address";
-  const addressWidth = font.widthOfTextAtSize(addressText, 10);
-  page.drawText(addressText, {
-    x: (PAGE.width - addressWidth) / 2,
-    y,
-    size: 10,
-    font,
-    color: rgb(0.35, 0.35, 0.35),
-  });
-  y -= 28;
+  const addressLines = wrapText(addressText, font, 10, PAGE.width - PAGE.margin * 2 - 120);
+  for (const line of addressLines) {
+    const addressWidth = font.widthOfTextAtSize(line, 10);
+    page.drawText(line, {
+      x: (PAGE.width - addressWidth) / 2,
+      y,
+      size: 10,
+      font,
+      color: rgb(0.35, 0.35, 0.35),
+    });
+    y -= 14;
+  }
+  y -= 14;
 
   page.drawLine({
     start: { x: PAGE.margin, y },
@@ -430,27 +434,6 @@ export const buildBudgetSheetPdf = async ({
     y -= 20;
 
     const safeAddress = collegeAddress || "College Address";
-    const addressWidth = font.widthOfTextAtSize(safeAddress, 10.5);
-    page.drawText(safeAddress, {
-      x: (LANDSCAPE_PAGE.width - addressWidth) / 2,
-      y,
-      size: 10.5,
-      font,
-      color: rgb(0.38, 0.38, 0.4),
-    });
-    y -= 18;
-
-    const reportDate = `Date: ${normalizeDate(date)}`;
-    const dateWidth = font.widthOfTextAtSize(reportDate, 10.5);
-    page.drawText(reportDate, {
-      x: (LANDSCAPE_PAGE.width - dateWidth) / 2,
-      y,
-      size: 10.5,
-      font,
-      color: rgb(0.18, 0.18, 0.2),
-    });
-    y -= 18;
-
     const safeTitle = title || "Budget Report";
     const titleWidth = bold.widthOfTextAtSize(safeTitle, 13);
     page.drawText(safeTitle, {
@@ -460,7 +443,30 @@ export const buildBudgetSheetPdf = async ({
       font: bold,
       color: rgb(0.12, 0.12, 0.12),
     });
-    y -= 18;
+    y -= 16;
+
+    const addressLines = wrapText(safeAddress, font, 10.5, LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin * 2 - 120);
+    addressLines.forEach((line) => {
+      const addressWidth = font.widthOfTextAtSize(line, 10.5);
+      page.drawText(line, {
+        x: (LANDSCAPE_PAGE.width - addressWidth) / 2,
+        y,
+        size: 10.5,
+        font,
+        color: rgb(0.38, 0.38, 0.4),
+      });
+      y -= 14;
+    });
+
+    const reportDate = `Date: ${normalizeDate(date)}`;
+    page.drawText(reportDate, {
+      x: LANDSCAPE_PAGE.margin,
+      y,
+      size: 10.5,
+      font,
+      color: rgb(0.18, 0.18, 0.2),
+    });
+    y -= 16;
 
     page.drawLine({
       start: { x: LANDSCAPE_PAGE.margin, y },
@@ -504,27 +510,27 @@ export const buildBudgetSheetPdf = async ({
     let x = LANDSCAPE_PAGE.margin;
     page.drawRectangle({
       x,
-      y: y - 18,
+      y: y - 20,
       width: LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin * 2,
-      height: 18,
+      height: 20,
       color: rgb(0.93, 0.94, 0.96),
     });
     tableColumns.forEach((column) => {
       page.drawText(column.label, {
         x: x + 4,
-        y: y - 12.5,
+        y: y - 13.5,
         size: 8.3,
         font: bold,
         color: rgb(0.12, 0.12, 0.12),
       });
       x += column.width;
     });
-    y -= 18;
+    y -= 20;
   };
 
   const drawRow = (cells) => {
     let x = LANDSCAPE_PAGE.margin;
-    const rowHeight = 18;
+    const rowHeight = 20;
     page.drawRectangle({
       x,
       y: y - rowHeight,
@@ -539,7 +545,7 @@ export const buildBudgetSheetPdf = async ({
       const value = truncateToWidth(cells[column.key], font, 8.2, column.width - 8);
       page.drawText(value, {
         x: x + 4,
-        y: y - 12.2,
+        y: y - 13.3,
         size: 8.2,
         font: column.key === "amount" ? bold : font,
         color: rgb(0.14, 0.14, 0.16),
@@ -552,17 +558,17 @@ export const buildBudgetSheetPdf = async ({
   await drawHeader();
 
   for (const record of records) {
-    await ensureSpace(80);
+    await ensureSpace(94);
     page.drawRectangle({
       x: LANDSCAPE_PAGE.margin,
-      y: y - 22,
+      y: y - 24,
       width: LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin * 2,
-      height: 22,
+      height: 24,
       color: rgb(0.96, 0.97, 0.99),
     });
     page.drawText(`${record.title} | ${record.category}`, {
       x: LANDSCAPE_PAGE.margin + 6,
-      y: y - 14.5,
+      y: y - 15.5,
       size: 10,
       font: bold,
       color: rgb(0.12, 0.12, 0.14),
@@ -571,18 +577,18 @@ export const buildBudgetSheetPdf = async ({
     const metaWidth = font.widthOfTextAtSize(meta, 8.5);
     page.drawText(meta, {
       x: LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin - metaWidth - 6,
-      y: y - 14.2,
+      y: y - 15.2,
       size: 8.5,
       font,
       color: rgb(0.36, 0.36, 0.38),
     });
-    y -= 28;
+    y -= 30;
 
     drawTableHeader();
 
     const items = Array.isArray(record.items) && record.items.length > 0 ? record.items : [];
     if (items.length === 0) {
-      await ensureSpace(20);
+      await ensureSpace(24);
       drawRow({
         sr: "1",
         expenseId: "--",
@@ -597,7 +603,7 @@ export const buildBudgetSheetPdf = async ({
       });
     } else {
       for (const [index, item] of items.entries()) {
-        await ensureSpace(20);
+        await ensureSpace(24);
         drawRow({
           sr: String(index + 1),
           expenseId: item.expenseId || item.id || "--",
@@ -613,7 +619,7 @@ export const buildBudgetSheetPdf = async ({
       }
     }
 
-    await ensureSpace(58);
+    await ensureSpace(66);
     const totalsX = LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin - 235;
     const totalRows = [
       ["Subtotal", formatCurrency(record.subtotal || 0)],
@@ -625,20 +631,20 @@ export const buildBudgetSheetPdf = async ({
       const isGrand = index === totalRows.length - 1;
       page.drawText(label, {
         x: totalsX,
-        y: y - index * 16,
+        y: y - index * 18,
         size: isGrand ? 9.4 : 8.8,
         font: isGrand ? bold : font,
         color: rgb(0.18, 0.18, 0.2),
       });
       page.drawText(value, {
         x: LANDSCAPE_PAGE.width - LANDSCAPE_PAGE.margin - 8 - bold.widthOfTextAtSize(value, isGrand ? 9.4 : 8.8),
-        y: y - index * 16,
+        y: y - index * 18,
         size: isGrand ? 9.4 : 8.8,
         font: isGrand ? bold : font,
         color: rgb(0.12, 0.12, 0.14),
       });
     });
-    y -= 74;
+    y -= 84;
   }
 
   drawFooter();
