@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Download, FileText, LoaderCircle } from "lucide-react";
+import { ArrowLeft, ChevronDown, Download, FileText, LoaderCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, downloadBase64Pdf } from "@/lib/api";
 import { CLUBS, COLLEGE_BRAND, getClubById } from "@/lib/clubs";
@@ -20,6 +20,8 @@ interface ProposalData {
   objective: string;
   eventSummary: string;
   keyPoints: string;
+  facultyName: string;
+  facultyDesignation: string;
 }
 
 const initialState: ProposalData = {
@@ -37,22 +39,68 @@ const initialState: ProposalData = {
   objective: "",
   eventSummary: "",
   keyPoints: "",
+  facultyName: "",
+  facultyDesignation: "",
 };
 
-const LogoBadge = ({ label, hex }: { label: string; hex: string }) => (
-  <div
-    className="flex h-14 w-14 items-center justify-center text-xs font-bold uppercase tracking-wider text-white brutal-border"
-    style={{ backgroundColor: hex }}
-  >
-    {label}
-  </div>
-);
+const LogoBadge = ({
+  label,
+  hex,
+  logoPath,
+  size = "lg",
+}: {
+  label: string;
+  hex: string;
+  logoPath?: string;
+  size?: "sm" | "lg";
+}) => {
+  const [failed, setFailed] = useState(false);
+  const dimension = size === "sm" ? "h-9 w-9" : "h-14 w-14";
+  const textSize = size === "sm" ? "text-[10px]" : "text-xs";
+
+  if (logoPath && !failed) {
+    return (
+      <div className={`flex ${dimension} items-center justify-center overflow-hidden bg-white brutal-border`}>
+        <img src={logoPath} alt={label} className="h-full w-full object-contain p-1" onError={() => setFailed(true)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex ${dimension} items-center justify-center ${textSize} font-bold uppercase tracking-wider text-white brutal-border`} style={{ backgroundColor: hex }}>
+      {label}
+    </div>
+  );
+};
+
+const assetUrlToDataUrl = async (assetPath?: string) => {
+  if (!assetPath) {
+    return "";
+  }
+
+  try {
+    const response = await fetch(assetPath);
+    if (!response.ok) {
+      return "";
+    }
+
+    const blob = await response.blob();
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return "";
+  }
+};
 
 const ProposalGenerator = () => {
   const [data, setData] = useState<ProposalData>(initialState);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedFile, setGeneratedFile] = useState<{ fileName: string; pdfBase64: string } | null>(null);
   const [status, setStatus] = useState("");
+  const [clubMenuOpen, setClubMenuOpen] = useState(false);
 
   const selectedClub = useMemo(() => getClubById(data.clubId), [data.clubId]);
 
@@ -65,16 +113,29 @@ const ProposalGenerator = () => {
     setStatus("");
 
     try {
+      const [collegeLogo, clubLogo] = await Promise.all([
+        assetUrlToDataUrl(COLLEGE_BRAND.logoPath),
+        assetUrlToDataUrl(selectedClub.logoPath),
+      ]);
+
       const response = await api.generateProposal({
         ...data,
         clubName: selectedClub.name,
         clubAcronym: selectedClub.acronym,
         clubBrandColor: selectedClub.hex,
         collegeBrandColor: COLLEGE_BRAND.hex,
+        collegeLogo,
+        clubLogo,
         keyPoints: data.keyPoints
           .split("\n")
           .map((item) => item.trim())
           .filter(Boolean),
+        signatories: [
+          {
+            name: data.facultyName,
+            designation: data.facultyDesignation,
+          },
+        ].filter((item) => item.name || item.designation),
       });
       setGeneratedFile(response);
       setStatus("Proposal PDF generated successfully.");
@@ -143,13 +204,40 @@ const ProposalGenerator = () => {
 
           <div>
             <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Club</label>
-            <select className="brutal-input" value={data.clubId} onChange={(event) => update("clubId", event.target.value)}>
-              {CLUBS.map((club) => (
-                <option key={club.id} value={club.id}>
-                  {club.acronym} - {club.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <button type="button" onClick={() => setClubMenuOpen((previous) => !previous)} className="brutal-input flex items-center justify-between gap-3 text-left">
+                <span className="flex items-center gap-3">
+                  <LogoBadge label={selectedClub.acronym} hex={selectedClub.hex} logoPath={selectedClub.logoPath} size="sm" />
+                  <span>
+                    <span className="block font-bold uppercase">{selectedClub.acronym}</span>
+                    <span className="block text-xs text-muted-foreground">{selectedClub.name}</span>
+                  </span>
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${clubMenuOpen ? "rotate-180" : ""}`} strokeWidth={2.5} />
+              </button>
+
+              {clubMenuOpen ? (
+                <div className="absolute z-20 mt-2 w-full overflow-hidden bg-card brutal-border brutal-shadow-sm">
+                  {CLUBS.map((club) => (
+                    <button
+                      key={club.id}
+                      type="button"
+                      onClick={() => {
+                        update("clubId", club.id);
+                        setClubMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 border-b border-foreground/10 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                    >
+                      <LogoBadge label={club.acronym} hex={club.hex} logoPath={club.logoPath} size="sm" />
+                      <span>
+                        <span className="block font-bold uppercase">{club.acronym}</span>
+                        <span className="block text-xs text-muted-foreground">{club.name}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -205,18 +293,29 @@ const ProposalGenerator = () => {
             <textarea className="brutal-input min-h-[100px] resize-y" placeholder={"One point per line\nExpected outcomes\nRequired approvals"} value={data.keyPoints} onChange={(event) => update("keyPoints", event.target.value)} />
           </div>
 
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Faculty Name for Signature</label>
+              <input className="brutal-input" placeholder="Dr. A. B. Faculty" value={data.facultyName} onChange={(event) => update("facultyName", event.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider">Faculty Designation</label>
+              <input className="brutal-input" placeholder="Faculty Coordinator" value={data.facultyDesignation} onChange={(event) => update("facultyDesignation", event.target.value)} />
+            </div>
+          </div>
+
           {status ? <p className="font-mono text-xs text-muted-foreground">{status}</p> : null}
         </motion.div>
 
         <motion.div className="sticky top-6" initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
           <div className="brutal-card min-h-[760px]">
             <div className="flex items-start justify-between gap-4 border-b-2 border-foreground pb-5">
-              <LogoBadge label={data.collegeAcronym || "PCCOE"} hex={COLLEGE_BRAND.hex} />
+              <LogoBadge label={data.collegeAcronym || "PCE"} hex={COLLEGE_BRAND.hex} logoPath={COLLEGE_BRAND.logoPath} />
               <div className="flex-1 text-center">
                 <h2 className="text-lg font-bold uppercase">{data.collegeName || COLLEGE_BRAND.name}</h2>
-                <p className="mt-1 text-xs text-muted-foreground">{data.collegeAddress || COLLEGE_BRAND.address}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{data.collegeAddress || "Add the college address here."}</p>
               </div>
-              <LogoBadge label={selectedClub.acronym} hex={selectedClub.hex} />
+              <LogoBadge label={selectedClub.acronym} hex={selectedClub.hex} logoPath={selectedClub.logoPath} />
             </div>
 
             <div className="mt-6 space-y-5">
@@ -265,10 +364,18 @@ const ProposalGenerator = () => {
                 </div>
               </div>
 
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider">Signature Block</p>
+                <div className="mt-4 flex max-w-xs flex-col gap-1 border-t border-foreground/30 pt-4 text-sm">
+                  <span className="font-bold">{data.facultyName || "Faculty Name"}</span>
+                  <span className="text-muted-foreground">{data.facultyDesignation || "Designation"}</span>
+                </div>
+              </div>
+
               <div className="rounded-[18px] bg-background p-4 brutal-border">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Branding note</p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Official image files were not present in the project, so the proposal currently uses branded acronym logo badges for PCCOE and the selected club. If you add official PNG/JPG logo assets later, this flow can swap to them directly.
+                  Add the official image files at `public/logos/college/pce.png` and `public/logos/clubs/*.png`. The page and generated PDF will automatically use those logos; until then, the branded fallback badge is shown.
                 </p>
               </div>
             </div>
